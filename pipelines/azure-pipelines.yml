@@ -8,7 +8,7 @@ variables:
   tfWorkingDir: '$(System.DefaultWorkingDirectory)/terraform'
   location: 'East US'
   resourceGroup: 'monitoring-rg'
-  tfVersion: '1.8.4'                            # pick a stable version
+  tfVersion: '1.8.4'                            # pin a stable version
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -22,31 +22,33 @@ stages:
     displayName: 'Provision monitoring stack'
     steps:
 
-    # 1) Checkout repo
+    # 1️⃣ Checkout repo
     - checkout: self
 
-    # 2) Install / pin Terraform
-    - task: TerraformInstaller@0                # ← changed @1 ➜ @0
+    # 2️⃣ Install the exact Terraform version once for the whole job
+    - task: TerraformInstaller@1
       displayName: 'Install Terraform $(tfVersion)'
       inputs:
         terraformVersion: '$(tfVersion)'
 
-    # 3) Terraform init
-    - task: TerraformCLI@0                      # ← changed @1 ➜ @0
+    # (optional) quick sanity check
+    - bash: terraform -version
+      displayName: 'Show Terraform version'
+
+    # 3️⃣ terraform init
+    - task: TerraformCLI@1
       displayName: 'terraform init'
       inputs:
-        provider: 'azurerm'
         command: 'init'
         workingDirectory: '$(tfWorkingDir)'
         backendType: 'azurerm'
-        ensureBackend: false          # backend declared in providers.tf
         environmentServiceName: '$(azureServiceConn)'
+        allowTelemetryCollection: false          # quiet‑mode
 
-    # 4) Terraform plan  (plan file published as an artifact)
-    - task: TerraformCLI@0
+    # 4️⃣ terraform plan  (plan file published as an artifact)
+    - task: TerraformCLI@1
       displayName: 'terraform plan'
       inputs:
-        provider: 'azurerm'
         command: 'plan'
         workingDirectory: '$(tfWorkingDir)'
         environmentServiceName: '$(azureServiceConn)'
@@ -55,15 +57,15 @@ stages:
           -var="location=$(location)"
           -var="resource_group_name=$(resourceGroup)"
           -var="action_group_email=alerts@example.com"
-        publishPlanResults: 'plan'     # lets you inspect diff in UI
+        publishPlanResults: 'plan'               # inspect diff in UI
 
-    # 5) (optional) manual approval gate → configure in “Environments”
+    # 5️⃣ (optional) manual approval gate → configure in “Environments”
     # ---------------------------------------------------------------
-    # 6) Terraform apply
-    - task: TerraformCLI@0
+
+    # 6️⃣ terraform apply
+    - task: TerraformCLI@1
       displayName: 'terraform apply'
       inputs:
-        provider: 'azurerm'
         command: 'apply'
         workingDirectory: '$(tfWorkingDir)'
         environmentServiceName: '$(azureServiceConn)'
